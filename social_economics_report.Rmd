@@ -1,0 +1,1619 @@
+---
+title: "Social Economic Visualizations"
+author: 'By: Jeremy Kight'
+date: "12/12/2019"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+***
+
+# Introduction
+
+
+|        In an attempt for the government to improve public access to datasets, the U.S. General Services Administration, Technology Transformation Service, starting managing and hosting Data.gov. This website provides access to over 180,000 datasets available for conducting research or just practicing data cleaning and visualizations. This report will be using the "County-level Data Sets" provided by the Economic Research Service, found [here](https://catalog.data.gov/dataset/county-level-data-sets). More specifically, the datasets that will be used for analysis are: Unemployment, Population Estimates, and Education. These datasets provide an excellent opportunity for data cleaning and visualizations. This report will describe one way to transform and visualize the data to see how certain social economic factors differ across the United States.
+
+
+# Procedure
+
+## Loading in Appropriate Libraries
+
+
+|        First, to perform analysis on the three datasets, Unemployment, Population Estimates, and Education, certain libraries need to be loaded into R. In this project, tidyverse, readxl, ggplot2, and urbnmapr will be utilized in some capacity, thus, those libraries need to be loaded in. Remember that before getting started, creating a project in RStudio will help organize all the files and set the appropriate working directory. 
+
+<br>
+``` {r chunk_name, results="hide"}
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+library(urbnmapr)
+```
+<br>
+
+## Load In Excel Files
+
+
+|        First, download the three files from  [Data.gov](https://catalog.data.gov/dataset/county-level-data-sets) and place them in the directory created for this project. The next thing that should be done, is to open the three excel files and look at the spreadsheets. While the information in the first few rows are important, they will serve no purpose in the data analysis performed in this report. Thus, the rows before each table were removed in Excel (note that this could have been done in R as well). Once the files are saved in the appropriate location, they are ready to be loaded into RStudio. 
+
+<br>
+``` {r}
+unemployment <- read_excel("Unemployment.xls")
+population <- read_excel("PopulationEstimates.xls")
+education <- read_excel("Education.xls")
+```
+<br>
+
+## Data Transformation
+
+### Unemployment Data
+
+
+|        Using RStudio is great for several reasons, however, one particular aspect that is quite useful is being able to see how large a dataset is within the working environment. In this case, it is easy to see that the unemployment dataset has 3275 observations and 56 variables (3275 rows and 56 columns). To see the actual dataset, run the code below. It should be noted that to see only a small portion of the dataset, then the head() function should be utilized.
+
+<br>
+``` {r, results="hide"}
+view(unemployment)
+```
+<br>
+
+|        Looking at the unemployment dataset, it should be noticed that the view() function does not show the type of variables that the dataset contains. This can be checked with the str() function. 
+
+<br>
+``` {r, results = "hide"}
+str(unemployment)
+```
+<br>
+
+The results of the code above will not be shown in this report to save space, but it is recommended to run. Upon viewing the results, some important details that should be noticed are: the "FIPS" variable is a numeric vector and the "State" variable is a character vector instead of a factor. Before converting the "State" variable to a factor, check to see how many different factors the dataset contains.
+
+<br>
+```{r}
+table(unemployment$State)
+```
+<br>
+
+Notice that there is a "Co" and "CO" factor. This is most likely a typo error that occurred when the data was being inputed. Before proceeding, this error needs to be dealt with. To do this, find the location of the "Co" value, replace the "Co" value with "CO" ,and then check to ensure the factors are correct.
+
+<br>
+```{r, results="hide"}
+#Find the Co value
+unemployment$State
+```
+``` {r, results="hide"}
+#Change Co to CO
+unemployment$State[254] <- "CO"
+```
+```{r}
+#Double Check
+table(unemployment$State)
+```
+<br>
+
+|        Next, convert the "State" column into a factor. Then, proceed to take out columns that are not going to be used in this analysis. This will help in decluttering the dataset. Of course, it would be a good habit to double check to ensure the code worked properly.
+
+
+<br>
+```{r, results="hide"}
+#Convert State into a factor
+unemployment$State <- as.factor(unemployment$State)
+
+#Remove columns
+unemployment <- select(unemployment, FIPS:Area_name, Civilian_labor_force_2010:Median_Household_Income_2017)
+view(unemployment)
+```
+<br>
+
+|        The unemployment dataset contains both county and state data. While they don't have to be separated into two different datasets, doing so will make graphing with urban maps a little easier. The easiest way to filter the state data from the county data is through the FIPS code. Notice that the state FIPS codes are the only ones divisable by 1000. Because the FIPS variable is numeric, this can be done easily with the code below.
+
+<br>
+``` {r}
+unemployment_state <- unemployment %>%
+  filter(FIPS %% 1000 == 0 & State != "US" & State != "PR") %>%
+  rename(county_fips = "FIPS", state = "State", state_name = "Area_name")
+```
+
+``` {r}
+unemployment_county <- unemployment %>%
+  filter(FIPS %% 1000 != 0 & State != "US" & State != "PR") %>%
+  rename(county_fips = "FIPS", state = "State", state_name = "Area_name")
+```
+<br>
+
+|        From this point forward, only **unemployment_state** and **unemployment_county** will be used when dealing with unemployment data. There is one last thing that needs to be done with these datasets and that is to convert the FIPS codes into a character type.
+
+<br>
+```{r}
+unemployment_state$county_fips <- as.character(unemployment_state$county_fips)
+
+unemployment_county$county_fips <- as.character(unemployment_county$county_fips)
+```
+<br>
+
+### Population Data
+
+
+|        The same process will be taken with the population dataset. It is encouraged to peak at the dataset to see what kind of data it holds and what variables it contains. Here, view() is used but head() could have also been used. After looking at the dataset, check to see what type of variables are present. Then check if the **State** variable has any input errors, especially after seeing that this was the case with the unemployment dataset. The results of the following code will not be shown here to save space.
+
+<br>
+``` {r, results="hide"}
+view(population)
+```
+
+``` {r, results = "hide"}
+str(unemployment)
+```        
+
+```{r, results="hide"}
+table(population$State)
+```
+<br>
+
+
+|        Unlike the unemployment dataset, there are no errors present! However, since the **FIPS** variable is a character type and it needs to be numeric in order to filter the state and county data, it needs to be converted. Also, the **State** variable needs to be converted into a factor type as well. Once this is completed, any unnecessary columns should be removed from the dataset. The below code will take care of all of this.
+
+<br>
+```{r}
+#Conver FIPS to numeric
+population$FIPS <- as.numeric(population$FIPS)
+```
+```{r}
+#Convert State to a factor
+population$State <- as.factor(population$State)
+```
+```{r}
+#Take out columns that aren't needed
+population <- select(population, FIPS:Area_Name, POP_ESTIMATE_2010:POP_ESTIMATE_2018, Births_2010:Deaths_2018)
+```
+<br>
+
+|        Now it is time to separate the state and county data. This will be done with the same procedure that was used when separating the unemployment data.
+
+<br>
+```{r}
+population_state <- population %>%
+  filter(FIPS %% 1000 == 0 & State != "US" & State != "PR") %>%
+  rename(county_fips = "FIPS", state = "State", state_name = "Area_Name")
+```
+
+```{r}
+population_county <- population %>%
+  filter(FIPS %% 1000 != 0 & State != "US" & State != "PR") %>%
+  rename(county_fips = "FIPS", state = "State", state_name = "Area_Name")
+```
+<br>
+
+|        From this point forward, only **population_state** and **population_county** will be used when dealing with population data. Again, there is one last thing that needs to be done with these datasets and that is to convert the FIPS codes into a character type.
+
+<br>
+```{r}
+population_state$county_fips <- as.character(population_state$county_fips)
+
+population_county$county_fips <- as.character(population_county$county_fips)
+```
+<br>
+
+### Education Data
+
+|        Just as was done with the unemployment and population datasets, start the data transformation by viewing the education dataset to get an idea of what it entails. Then check the data types and **State** variable to make sure there were not any errors.
+
+<br>
+``` {r, results="hide"}
+view(education)
+```
+
+``` {r, results = "hide"}
+str(education)
+```        
+
+```{r, results="hide"}
+table(education$State)
+```
+<br>
+
+|        One thing that should have been noticed when looking at the columns in the education dataset was that the names were really complicated. The column names contained many spaces, commas, and numbers which would make using those variablesin R more difficult. So adjusting the names is highly recommended.
+
+<br>
+```{r}
+#Adjust column names
+names(education) <- str_replace_all(names(education), c(" " = "_", "," = "_", "-" = "_to_", "'"="", "__"  = "_"))
+view(education)
+```
+<br>
+
+|        Just as before, convert the **State** variable to a factor and change the **FIPS_Code** variable from a character variable type to a numeric variable type. Then, take out the columns that are not going to be used.
+
+<br>
+```{r}
+#Conver FIPS to numeric
+education$FIPS_Code <- as.numeric(education$FIPS_Code)
+```
+
+```{r}
+#Convert State to a factor
+education$State <- as.factor(education$State)
+```
+
+```{r}
+#Take out columns that aren't needed
+education <- select(education, FIPS_Code:Area_name,                Less_than_a_high_school_diploma_2000:Percent_of_adults_with_a_bachelors_degree_or_higher_2013_to_17)
+```
+
+|        Finally, separate the state and county data. Again, this will be done using the same procedure as before with the unemployment and population datasets. Once this is completed, only **education_state** and **education_county** will be used in the analysis. After the state and county data is separated, convert the FIPS codes back to character types.
+
+<br>
+```{r}
+education_state <- education %>%
+  filter(FIPS_Code %% 1000 == 0 & State != "US" & State != "PR") %>%
+  rename(county_fips = "FIPS_Code", state = "State", state_name = "Area_name")
+```
+
+```{r}
+education_county <- education %>%
+  filter(FIPS_Code %% 1000 != 0 & State != "US" & State != "PR") %>%
+  rename(county_fips = "FIPS_Code", state = "State", state_name = "Area_name")
+```
+
+```{r}
+education_state$county_fips <- as.character(education_state$county_fips)
+```
+
+```{r}
+education_county$county_fips <- as.character(education_county$county_fips)
+```
+
+## Map Data
+
+|        This section encompasses how to set up the mapping data using the **urbnmapr** package. The urbnmapr package is really convient and makes plotting data on maps easy, without sacrificing quality. This package creates excellent state maps and county maps, depending on the type of data that needs to be visualized. Since the unemployment, population, and education datasets contain both state and county data, both types of maps will be required. To begin, create a dataset that contains the U.S. states mapping data from **urbnmapr**. Then, peak at the new dataset using the head() function.
+
+<br>
+```{r}
+#Create blank map of the US states
+blank_states <- get_urbn_map("states", sf = TRUE)
+```
+
+```{r, results="hide"}
+head(blank_states)
+```
+<br>
+
+|        Notice that the **state_abbv** variable contains the same information as the **state** variable in all three of the datasets created earlier. Since these datasets will need to be joined together for plotting the data, go ahead and change the variable name to match. Then convert the **state** variable to a factor.
+
+<br>
+```{r}
+blank_states <- rename(blank_states, state = "state_abbv")
+```
+
+```{r}
+blank_states$state <- as.factor(blank_states$state)
+```
+<br>
+
+|        The same procedure will be used to create the county mapping dataset. Again, by creating these datasets now will save time later since many plots will be created. 
+
+<br>
+```{r}
+#Create blank map of the US counties
+blank_counties <- get_urbn_map("counties", sf = TRUE)
+```
+
+```{r, results="hide"}
+#head(blank_map)
+```
+
+```{r}
+blank_counties <- rename(blank_counties, state = "state_abbv")
+```
+
+```{r}
+#Convert state to a factor
+blank_counties$state <- as.factor(blank_counties$state)
+```
+
+```{r}
+blank_counties <- arrange(blank_counties, county_fips)
+```
+<br>
+
+## State Visualizations
+
+
+|        The driving force behind this project was to visualize the state and county data and see how the different states compare, with respect to unemployment, population, and education data. This section contains static quantaties, as well as, rates over specific periods of time. To Calculate the rate of change of the various variables, the following formula was use:
+
+$$Rate\:of\:Change = \frac{old - new}{old}*100\%$$
+
+Below is the compilation of the different plots created to visualize the data in this project. Urbnmapr and ggplot were two packages used for visualizations. To see the codes used to generate the following plots, please refer to the appendix by clicking here.
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 1: Unemployment Rates 2010 to 2018." , echo=FALSE}
+unemployment_state <- mutate(unemployment_state, 
+                             unemployment_percent_change = (Unemployment_rate_2018 - Unemployment_rate_2010)
+                             /Unemployment_rate_2010)
+
+left_join(blank_states,unemployment_state) %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = unemployment_percent_change),
+          color  = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Change in Unemployment Rate from 2010 to 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 2: The rate of change regarding civilian labor force from 2010 to 2018." , echo=FALSE}
+unemployment_state <- mutate(unemployment_state,
+                             laborforce_percent_change = (Civilian_labor_force_2018 - Civilian_labor_force_2010)
+                             /Civilian_labor_force_2010)
+
+left_join(blank_states,unemployment_state) %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = laborforce_percent_change),
+          color  = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Percent of Change in Civilian Labor Force")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 3: Population estimate of each state in 2018." , echo=FALSE}
+left_join(blank_states,population_state) %>%
+  ggplot() +
+    geom_sf(mapping = aes(fill = POP_ESTIMATE_2018),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Amount of People",
+       x = "",
+       y = "",
+       title = "Population Estimate 2018")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 4: The rate of change of the states' population from 2010 to 2018." , echo=FALSE}
+population_state <- mutate(population_state,
+                           population_percent_change = (POP_ESTIMATE_2018 - POP_ESTIMATE_2010)
+                           / POP_ESTIMATE_2010)
+
+left_join(blank_states,population_state) %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = population_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Percent of Change in Population")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 5: The amount of people with a high school diploma or less in 2017." , echo=FALSE}
+education_state <- mutate(education_state,
+                           High_school_or_less = Less_than_a_high_school_diploma_2013_to_17 + 
+                             High_school_diploma_only_2013_to_17)
+
+left_join(blank_states,education_state, by = "state") %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = High_school_or_less),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Amount of People",
+       x = "",
+       y = "",
+       title = "Number of People with a High School Education or Less 2017")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 6: The amount of people with at least a Bachelors degree in 2017." , echo=FALSE}
+left_join(blank_states,education_state, by = "state") %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Bachelors_degree_or_higher_2013_to_17),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Bachelors or Higher",
+       x = "",
+       y = "",
+       title = "Number of People with a Bachelors Degree or Higher 2017")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 7: Percent of change for people with high school diploma or less from 2000 to 2017." , echo=FALSE}
+
+education_state <- mutate(education_state,
+                          highschool_or_less_percent_change = (High_school_or_less-(Less_than_a_high_school_diploma_2000 + 
+                                                                 High_school_diploma_only_2000)) 
+                            /(Less_than_a_high_school_diploma_2000 + 
+                                High_school_diploma_only_2000))
+
+left_join(blank_states,education_state, by = "state") %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = highschool_or_less_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent of Change",
+       x = "",
+       y = "",
+       title = "Percent of Change for People with High School Diploma or Less")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 8: Percent of change for people with a bachelors degree or higher from 2000 to 2017." , echo=FALSE}
+education_state <- mutate(education_state,
+                          Bachelors_or_higher_percent_change = (Bachelors_degree_or_higher_2013_to_17 
+                                                               - Bachelors_degree_or_higher_2000) 
+                          /Bachelors_degree_or_higher_2000)
+
+left_join(blank_states,education_state, by = "state") %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Bachelors_or_higher_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent of Change",
+       x = "",
+       y = "",
+       title = "Percent of Change for People with a Bachelors Degree or Higher")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 9: The average median household income in 2017." , echo=FALSE}
+left_join(blank_states,unemployment_state) %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Median_Household_Income_2017),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::dollar, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Income",
+       x = "",
+       y = "",
+       title = "Median Household Income 2017")
+```
+<br>
+
+## Filtered State Plots
+
+```{r, echo=FALSE}
+unemployment_state <- filter(unemployment_state, state == "GA" | 
+                               state == "OH" | state == "TX")
+
+population_state <- filter(population_state, state == "GA" | 
+                              state == "OH" | state == "TX")
+
+education_state <- filter(education_state, state == "GA" | 
+                             state == "OH" | state == "TX")
+
+blank_states <- filter(blank_states, state == "GA" | 
+                         state == "OH" | state == "TX")
+# Joining them together
+
+dataset_state <- left_join(unemployment_state, population_state)
+
+dataset_state <- left_join(dataset_state, education_state)
+
+#Mapping dataset for states
+state_data <- left_join(blank_states, dataset_state)
+```
+
+```{r, echo=FALSE}
+#Before we filter out the data, remove Area_name from unemployment because it is inputed differently.
+unemployment_county <- select(unemployment_county, county_fips:state, Civilian_labor_force_2010:Median_Household_Income_2017)
+#view(unemployment)
+
+unemployment_county <- filter(unemployment_county, state == "GA" | 
+                         state == "OH" | state == "TX")
+
+population_county <- filter(population_county, state == "GA" | 
+                       state == "OH" | state == "TX")
+
+education_county <- filter(education_county, state == "GA" | 
+                      state == "OH" | state == "TX")
+
+blank_counties <- filter(blank_counties, state == "GA" | 
+                           state == "OH" | state == "TX")
+# Joining them together
+
+dataset_county <- left_join(unemployment_county, population_county)
+
+dataset_county <- left_join(dataset_county, education_county)
+
+dataset_county <- filter(dataset_county, !(state_name == "Georgia" | 
+                               state_name == "Ohio" | state_name == "Texas"))
+
+
+#Mapping dataset for counties
+county_data <- left_join(blank_counties, dataset_county, by = "county_fips")
+```
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 10: Bar graph representing the population of people in 2018." , echo=FALSE}
+ggplot(data = state_data, aes(x = state_name, y = POP_ESTIMATE_2018)) +
+  geom_bar(stat = "identity", fill = "green4") +
+  scale_x_discrete(name = "State") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  ggtitle("Population of People 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 11: Line graph representing the change in population of people from 2010 to 2018." , echo=FALSE}
+state_data %>%
+  select(state_fips:state_name, POP_ESTIMATE_2010:POP_ESTIMATE_2018, geometry) %>%
+  rename(
+    "2010" = POP_ESTIMATE_2010,
+    "2011" = POP_ESTIMATE_2011,
+    "2012" = POP_ESTIMATE_2012,
+    "2013" = POP_ESTIMATE_2013,
+    "2014" = POP_ESTIMATE_2014, 
+    "2015" = POP_ESTIMATE_2015,
+    "2016" = POP_ESTIMATE_2016,
+    "2017" = POP_ESTIMATE_2017,
+    "2018" = POP_ESTIMATE_2018
+  ) %>%
+  gather(Year, Population, "2010":"2018") %>%
+  ggplot() +
+  geom_point(mapping = aes(x = Year, y = Population, color = state)) +
+  scale_x_discrete(name = "Year") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  facet_wrap(~state, nrow = 1) +
+  theme(axis.text.x = element_text(size = 8, angle = 50)) +
+  ggtitle("Change in Population 2010-2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 12: Bar graph representing the amount of unemployed people in 2018." , echo=FALSE}
+
+ggplot(data = state_data, aes(x = state_name, y = Unemployed_2018)) +
+  geom_bar(stat = "identity", fill = "green4") +
+  scale_x_discrete(name = "State") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  ggtitle("Number of Unemployed People 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 13: Line graph representing the change in unemployed people from 2010 to 2018." , echo=FALSE}
+state_data %>%
+  select(state_fips:state_name, Unemployed_2010, Unemployed_2011, Unemployed_2012,
+         Unemployed_2013, Unemployed_2014, Unemployed_2015, Unemployed_2016, 
+         Unemployed_2017, Unemployed_2018) %>%
+  rename(
+    "2010" = Unemployed_2010,
+    "2011" = Unemployed_2011,
+    "2012" = Unemployed_2012,
+    "2013" = Unemployed_2013,
+    "2014" = Unemployed_2014, 
+    "2015" = Unemployed_2015,
+    "2016" = Unemployed_2016,
+    "2017" = Unemployed_2017,
+    "2018" = Unemployed_2018
+  ) %>%
+  gather(Year, Unemployed, "2010":"2018") %>%
+  ggplot() +
+  geom_point(mapping = aes(x = Year, y = Unemployed, color = state)) +
+  scale_x_discrete(name = "Year") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  facet_wrap(~state, nrow = 1) +
+  theme(axis.text.x = element_text(size = 8, angle = 50)) +
+  ggtitle("Change in Unemployment 2010 - 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 14: Line graph representing the change in the unemployment rate from 2010 to 2018." , echo=FALSE}
+state_data %>%
+  select(state_fips:state_name, Unemployment_rate_2010, Unemployment_rate_2011, Unemployment_rate_2012,
+         Unemployment_rate_2013, Unemployment_rate_2014, Unemployment_rate_2015, Unemployment_rate_2016, 
+         Unemployment_rate_2017, Unemployment_rate_2018) %>%
+  rename(
+    "2010" = Unemployment_rate_2010,
+    "2011" = Unemployment_rate_2011,
+    "2012" = Unemployment_rate_2012,
+    "2013" = Unemployment_rate_2013,
+    "2014" = Unemployment_rate_2014, 
+    "2015" = Unemployment_rate_2015,
+    "2016" = Unemployment_rate_2016,
+    "2017" = Unemployment_rate_2017,
+    "2018" = Unemployment_rate_2018
+  ) %>%
+  gather(Year, Unemployment_rate, "2010":"2018") %>%
+  ggplot() +
+  geom_point(mapping = aes(x = Year, y = Unemployment_rate, color = state)) +
+  scale_x_discrete(name = "Year") +
+  scale_y_continuous(name = "Percent") +
+  facet_wrap(~state, nrow = 1) +
+  theme(axis.text.x = element_text(size = 8, angle = 50)) +
+  ggtitle("Change in Unemployment Rate 2010 - 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 15: Bar graph representing the education levels in 2000." , echo=FALSE}
+state_data %>%
+  select(state_fips:state_name, Less_than_a_high_school_diploma_2000: Bachelors_degree_or_higher_2000) %>%
+  rename(
+    "No High School Diploma 2000" = Less_than_a_high_school_diploma_2000,
+    "High School Diploma 2000" = High_school_diploma_only_2000,
+    "Some College 2000" = Some_college_or_associates_degree_2000,
+    "Bachelors or Higher 2000" = Bachelors_degree_or_higher_2000
+  ) %>%
+  gather(Education, People, "No High School Diploma 2000":"Bachelors or Higher 2000") %>%
+  ggplot(mapping = aes(x = Education, y = People, fill = state)) +
+  geom_bar(stat="identity", position = "dodge", color = "black") +
+  scale_x_discrete(name = "Education") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  theme(axis.text.x = element_text(size = 8, angle = 0)) +
+  coord_flip() +
+  ggtitle("Amount of People with Different Education Levels, 2000")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 16: Bar graph representing the percent of education levels in 2000." , echo=FALSE}
+state_data %>%
+  select(state_fips:state_name, Percent_of_adults_with_less_than_a_high_school_diploma_2000: 
+           Percent_of_adults_with_a_bachelors_degree_or_higher_2000) %>%
+  rename(
+    "No High School Diploma 2000" = Percent_of_adults_with_less_than_a_high_school_diploma_2000,
+    "High School Diploma 2000" = Percent_of_adults_with_a_high_school_diploma_only_2000,
+    "Some College 2000" = Percent_of_adults_completing_some_college_or_associates_degree_2000,
+    "Bachelors or Higher 2000" = Percent_of_adults_with_a_bachelors_degree_or_higher_2000
+  ) %>%
+  gather(Education, People, "No High School Diploma 2000":"Bachelors or Higher 2000") %>%
+  ggplot(mapping = aes(x = Education, y = People, fill = state)) +
+  geom_bar(stat="identity", position = "dodge", color = "black") +
+  scale_x_discrete(name = "Education") +
+  scale_y_continuous(name = "Percent") +
+  theme(axis.text.x = element_text(size = 8, angle = 0)) +
+  coord_flip() +
+  ggtitle("Percent of Different Education Levels, 2000")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 17: Bar graph representing the education levels in 2017." , echo=FALSE}
+state_data %>%
+  select(state_fips:state_name, Less_than_a_high_school_diploma_2013_to_17: Bachelors_degree_or_higher_2013_to_17) %>%
+  rename(
+    "No High School Diploma 2017" = Less_than_a_high_school_diploma_2013_to_17, 
+    "High School Diploma 2017" = High_school_diploma_only_2013_to_17,
+    "Some College 2017" = Some_college_or_associates_degree_2013_to_17,
+    "Bachelors or Higher 2017" = Bachelors_degree_or_higher_2013_to_17
+  ) %>%
+  gather(Education, People, "No High School Diploma 2017":"Bachelors or Higher 2017") %>%
+  ggplot(mapping = aes(x = Education, y = People, fill = state)) +
+  geom_bar(stat="identity", position = "dodge", color = "black") +
+  scale_x_discrete(name = "Education") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  theme(axis.text.x = element_text(size = 8, angle = 0)) +
+  coord_flip() +
+  ggtitle("Amount of People with Different Education Levels, 2017")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 18: Bar graph representing the percent of education levels in 2017." , echo=FALSE}
+state_data %>%
+  select(state_fips:state_name, Percent_of_adults_with_less_than_a_high_school_diploma_2013_to_17: 
+           Percent_of_adults_with_a_bachelors_degree_or_higher_2013_to_17) %>%
+  rename(
+    "No High School Diploma 2017" = Percent_of_adults_with_less_than_a_high_school_diploma_2013_to_17, 
+    "High School Diploma 2017" = Percent_of_adults_with_a_high_school_diploma_only_2013_to_17,
+    "Some College 2017" = Percent_of_adults_completing_some_college_or_associates_degree_2013_to_17,
+    "Bachelors or Higher 2017" = Percent_of_adults_with_a_bachelors_degree_or_higher_2013_to_17
+  ) %>%
+  gather(Education, People, "No High School Diploma 2017":"Bachelors or Higher 2017") %>%
+  ggplot(mapping = aes(x = Education, y = People, fill = state)) +
+  geom_bar(stat="identity", position = "dodge", color = "black") +
+  scale_x_discrete(name = "Education") +
+  scale_y_continuous(name = "Percent") +
+  theme(axis.text.x = element_text(size = 8, angle = 0)) +
+  coord_flip() +
+  ggtitle("Percent of Different Education Levels, 2017")
+```
+
+## Filtered County Plots
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 19: Population estimate of the counties in 2018" , echo=FALSE}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = POP_ESTIMATE_2018),
+          color = "green", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Number of People",
+       x = "",
+       y = "",
+       title = "Population Estimate 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 19: Unemployment rate of the counties in 2018" , echo=FALSE}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Unemployment_rate_2018),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Unemployment Rate 2018")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 20: Amount of people without a high school diploma in 2000." , echo=FALSE}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Less_than_a_high_school_diploma_2000),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Number of People",
+       x = "",
+       y = "",
+       title = "Amount of People Without a High School Diploma 2000")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 21: Amount of people at least a Bachelors degree in 2000." , echo=FALSE}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Bachelors_degree_or_higher_2000),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Number of People",
+       x = "",
+       y = "",
+       title = "Amount of People with At Least a Bachelors Degree 2000")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 22: Amount of people without a high school diploma 2017." , echo=FALSE}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Less_than_a_high_school_diploma_2013_to_17),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Number of People",
+       x = "",
+       y = "",
+       title = "Amount of People Without a High School Diploma 2017")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 24: Amount of people with at least a Bachelors degree 2017." , echo=FALSE}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Bachelors_degree_or_higher_2013_to_17),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Number of People",
+       x = "",
+       y = "",
+       title = "Amount of People with At Least a Bachelors Degree 2017")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 25: Change in the unemployment rate from 2010 to 2018." , echo=FALSE}
+county_data <- mutate(county_data, 
+                             unemployment_percent_change = (Unemployment_rate_2018 - Unemployment_rate_2010)
+                             /Unemployment_rate_2010)
+
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = unemployment_percent_change),
+          color  = "white", size = 0.2) +
+  geom_sf_text(data = state_data, aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Change in Unemployment Rate from 2010 to 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 26: Percent of Change in Civilian Labor Force from 2010 to 2018." , echo=FALSE}
+county_data <- mutate(county_data,
+                             laborforce_percent_change = (Civilian_labor_force_2018 - Civilian_labor_force_2010)
+                             /Civilian_labor_force_2010)
+
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = laborforce_percent_change),
+          color  = "white", size = 0.2) +
+  geom_sf_text(data = state_data, aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Percent of Change in Civilian Labor Force")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 27: Percent of Change in Population from 2010 to 2018." , echo=FALSE}
+county_data <- mutate(county_data,
+                           population_percent_change = (POP_ESTIMATE_2018 - POP_ESTIMATE_2010)
+                           / POP_ESTIMATE_2010)
+
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = population_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(data = state_data, aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Percent of Change in Population")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 28: Percent of change for people with high school diploma or less from 2010 to 2018." , echo=FALSE}
+county_data <- mutate(county_data,
+                          highschool_or_less_percent_change = ((Less_than_a_high_school_diploma_2013_to_17
+                                                               + High_school_diploma_only_2013_to_17)
+                      - (Less_than_a_high_school_diploma_2000 + High_school_diploma_only_2000)) 
+                          / (Less_than_a_high_school_diploma_2000 + 
+                              High_school_diploma_only_2000))
+
+county_data %>% 
+  ggplot() +
+  geom_sf(mapping = aes(fill = highschool_or_less_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(data = state_data, aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent of Change",
+       x = "",
+       y = "",
+       title = "Percent of Change for People with High School Diploma or Less")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 29: Percent of change for people with a bachelors degree or higher from 2010 to 2018." , echo=FALSE}
+county_data <- mutate(county_data,
+                          Bachelors_or_higher_percent_change = (Bachelors_degree_or_higher_2013_to_17 
+                                                                - Bachelors_degree_or_higher_2000) 
+                          /Bachelors_degree_or_higher_2000)
+
+county_data %>% 
+  ggplot() +
+  geom_sf(mapping = aes(fill = Bachelors_or_higher_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(data = state_data, aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent of Change",
+       x = "",
+       y = "",
+       title = "Percent of Change for People with a Bachelors Degree or Higher")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 30: The median household income for each county in 2017." , echo=FALSE}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Median_Household_Income_2017),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::dollar, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Income",
+       x = "",
+       y = "",
+       title = "Median Household Income 2017")
+```
+<br>
+
+# Appendix
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 1: Unemployment Rates 2010 to 2018." , echo=TRUE, results= "hide"}
+unemployment_state <- mutate(unemployment_state, 
+                             unemployment_percent_change = (Unemployment_rate_2018 - Unemployment_rate_2010)
+                             /Unemployment_rate_2010)
+
+left_join(blank_states,unemployment_state) %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = unemployment_percent_change),
+          color  = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Change in Unemployment Rate from 2010 to 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 2: The rate of change regarding civilian labor force from 2010 to 2018." , echo=TRUE, results="hide"}
+unemployment_state <- mutate(unemployment_state,
+                             laborforce_percent_change = (Civilian_labor_force_2018 - Civilian_labor_force_2010)
+                             /Civilian_labor_force_2010)
+
+left_join(blank_states,unemployment_state) %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = laborforce_percent_change),
+          color  = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Percent of Change in Civilian Labor Force")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 3: Population estimate of each state in 2018." , echo=TRUE, results="hide"}
+left_join(blank_states,population_state) %>%
+  ggplot() +
+    geom_sf(mapping = aes(fill = POP_ESTIMATE_2018),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Amount of People",
+       x = "",
+       y = "",
+       title = "Population Estimate 2018")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 4: The rate of change of the states' population from 2010 to 2018." , echo=TRUE,results="hide"}
+population_state <- mutate(population_state,
+                           population_percent_change = (POP_ESTIMATE_2018 - POP_ESTIMATE_2010)
+                           / POP_ESTIMATE_2010)
+
+left_join(blank_states,population_state) %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = population_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Percent of Change in Population")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 5: The amount of people with a high school diploma or less in 2017." , echo=TRUE, results="hide"}
+education_state <- mutate(education_state,
+                           High_school_or_less = Less_than_a_high_school_diploma_2013_to_17 + 
+                             High_school_diploma_only_2013_to_17)
+
+left_join(blank_states,education_state, by = "state") %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = High_school_or_less),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Amount of People",
+       x = "",
+       y = "",
+       title = "Number of People with a High School Education or Less 2017")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 6: The amount of people with at least a Bachelors degree in 2017." , echo=TRUE, results="hide"}
+left_join(blank_states,education_state, by = "state") %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Bachelors_degree_or_higher_2013_to_17),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Bachelors or Higher",
+       x = "",
+       y = "",
+       title = "Number of People with a Bachelors Degree or Higher 2017")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 7: Percent of change for people with high school diploma or less from 2000 to 2017." , echo=TRUE, results="hide"}
+
+education_state <- mutate(education_state,
+                          highschool_or_less_percent_change = (High_school_or_less-(Less_than_a_high_school_diploma_2000 + 
+                                                                 High_school_diploma_only_2000)) 
+                            /(Less_than_a_high_school_diploma_2000 + 
+                                High_school_diploma_only_2000))
+
+left_join(blank_states,education_state, by = "state") %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = highschool_or_less_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent of Change",
+       x = "",
+       y = "",
+       title = "Percent of Change for People with High School Diploma or Less")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 8: Percent of change for people with a bachelors degree or higher from 2000 to 2017." , echo=TRUE, results="hide"}
+education_state <- mutate(education_state,
+                          Bachelors_or_higher_percent_change = (Bachelors_degree_or_higher_2013_to_17 
+                                                               - Bachelors_degree_or_higher_2000) 
+                          /Bachelors_degree_or_higher_2000)
+
+left_join(blank_states,education_state, by = "state") %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Bachelors_or_higher_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent of Change",
+       x = "",
+       y = "",
+       title = "Percent of Change for People with a Bachelors Degree or Higher")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 9: The average median household income in 2017." , echo=TRUE, results="hide"}
+left_join(blank_states,unemployment_state) %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Median_Household_Income_2017),
+          color = "white", size = 0.2) +
+  geom_sf_text(aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::dollar, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Income",
+       x = "",
+       y = "",
+       title = "Median Household Income 2017")
+```
+<br>
+
+## Filtered State Plots
+
+```{r, echo=TRUE}
+unemployment_state <- filter(unemployment_state, state == "GA" | 
+                               state == "OH" | state == "TX")
+
+population_state <- filter(population_state, state == "GA" | 
+                              state == "OH" | state == "TX")
+
+education_state <- filter(education_state, state == "GA" | 
+                             state == "OH" | state == "TX")
+
+blank_states <- filter(blank_states, state == "GA" | 
+                         state == "OH" | state == "TX")
+# Joining them together
+
+dataset_state <- left_join(unemployment_state, population_state)
+
+dataset_state <- left_join(dataset_state, education_state)
+
+#Mapping dataset for states
+state_data <- left_join(blank_states, dataset_state)
+```
+
+```{r, echo=TRUE}
+#Before we filter out the data, remove Area_name from unemployment because it is inputed differently.
+unemployment_county <- select(unemployment_county, county_fips:state, Civilian_labor_force_2010:Median_Household_Income_2017)
+#view(unemployment)
+
+unemployment_county <- filter(unemployment_county, state == "GA" | 
+                         state == "OH" | state == "TX")
+
+population_county <- filter(population_county, state == "GA" | 
+                       state == "OH" | state == "TX")
+
+education_county <- filter(education_county, state == "GA" | 
+                      state == "OH" | state == "TX")
+
+blank_counties <- filter(blank_counties, state == "GA" | 
+                           state == "OH" | state == "TX")
+# Joining them together
+
+dataset_county <- left_join(unemployment_county, population_county)
+
+dataset_county <- left_join(dataset_county, education_county)
+
+dataset_county <- filter(dataset_county, !(state_name == "Georgia" | 
+                               state_name == "Ohio" | state_name == "Texas"))
+
+
+#Mapping dataset for counties
+county_data <- left_join(blank_counties, dataset_county, by = "county_fips")
+```
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 10: Bar graph representing the population of people in 2018." , echo=TRUE, results="hide"}
+ggplot(data = state_data, aes(x = state_name, y = POP_ESTIMATE_2018)) +
+  geom_bar(stat = "identity", fill = "green4") +
+  scale_x_discrete(name = "State") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  ggtitle("Population of People 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 11: Line graph representing the change in population of people from 2010 to 2018." , echo=TRUE, results="hide"}
+state_data %>%
+  select(state_fips:state_name, POP_ESTIMATE_2010:POP_ESTIMATE_2018, geometry) %>%
+  rename(
+    "2010" = POP_ESTIMATE_2010,
+    "2011" = POP_ESTIMATE_2011,
+    "2012" = POP_ESTIMATE_2012,
+    "2013" = POP_ESTIMATE_2013,
+    "2014" = POP_ESTIMATE_2014, 
+    "2015" = POP_ESTIMATE_2015,
+    "2016" = POP_ESTIMATE_2016,
+    "2017" = POP_ESTIMATE_2017,
+    "2018" = POP_ESTIMATE_2018
+  ) %>%
+  gather(Year, Population, "2010":"2018") %>%
+  ggplot() +
+  geom_point(mapping = aes(x = Year, y = Population, color = state)) +
+  scale_x_discrete(name = "Year") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  facet_wrap(~state, nrow = 1) +
+  theme(axis.text.x = element_text(size = 8, angle = 50)) +
+  ggtitle("Change in Population 2010-2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 12: Bar graph representing the amount of unemployed people in 2018." , echo=TRUE, results="hide"}
+
+ggplot(data = state_data, aes(x = state_name, y = Unemployed_2018)) +
+  geom_bar(stat = "identity", fill = "green4") +
+  scale_x_discrete(name = "State") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  ggtitle("Number of Unemployed People 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 13: Line graph representing the change in unemployed people from 2010 to 2018." , echo=TRUE, results="hide"}
+state_data %>%
+  select(state_fips:state_name, Unemployed_2010, Unemployed_2011, Unemployed_2012,
+         Unemployed_2013, Unemployed_2014, Unemployed_2015, Unemployed_2016, 
+         Unemployed_2017, Unemployed_2018) %>%
+  rename(
+    "2010" = Unemployed_2010,
+    "2011" = Unemployed_2011,
+    "2012" = Unemployed_2012,
+    "2013" = Unemployed_2013,
+    "2014" = Unemployed_2014, 
+    "2015" = Unemployed_2015,
+    "2016" = Unemployed_2016,
+    "2017" = Unemployed_2017,
+    "2018" = Unemployed_2018
+  ) %>%
+  gather(Year, Unemployed, "2010":"2018") %>%
+  ggplot() +
+  geom_point(mapping = aes(x = Year, y = Unemployed, color = state)) +
+  scale_x_discrete(name = "Year") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  facet_wrap(~state, nrow = 1) +
+  theme(axis.text.x = element_text(size = 8, angle = 50)) +
+  ggtitle("Change in Unemployment 2010 - 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 14: Line graph representing the change in the unemployment rate from 2010 to 2018." , echo=TRUE, results="hide"}
+state_data %>%
+  select(state_fips:state_name, Unemployment_rate_2010, Unemployment_rate_2011, Unemployment_rate_2012,
+         Unemployment_rate_2013, Unemployment_rate_2014, Unemployment_rate_2015, Unemployment_rate_2016, 
+         Unemployment_rate_2017, Unemployment_rate_2018) %>%
+  rename(
+    "2010" = Unemployment_rate_2010,
+    "2011" = Unemployment_rate_2011,
+    "2012" = Unemployment_rate_2012,
+    "2013" = Unemployment_rate_2013,
+    "2014" = Unemployment_rate_2014, 
+    "2015" = Unemployment_rate_2015,
+    "2016" = Unemployment_rate_2016,
+    "2017" = Unemployment_rate_2017,
+    "2018" = Unemployment_rate_2018
+  ) %>%
+  gather(Year, Unemployment_rate, "2010":"2018") %>%
+  ggplot() +
+  geom_point(mapping = aes(x = Year, y = Unemployment_rate, color = state)) +
+  scale_x_discrete(name = "Year") +
+  scale_y_continuous(name = "Percent") +
+  facet_wrap(~state, nrow = 1) +
+  theme(axis.text.x = element_text(size = 8, angle = 50)) +
+  ggtitle("Change in Unemployment Rate 2010 - 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 15: Bar graph representing the education levels in 2000." , echo=TRUE, results="hide"}
+state_data %>%
+  select(state_fips:state_name, Less_than_a_high_school_diploma_2000: Bachelors_degree_or_higher_2000) %>%
+  rename(
+    "No High School Diploma 2000" = Less_than_a_high_school_diploma_2000,
+    "High School Diploma 2000" = High_school_diploma_only_2000,
+    "Some College 2000" = Some_college_or_associates_degree_2000,
+    "Bachelors or Higher 2000" = Bachelors_degree_or_higher_2000
+  ) %>%
+  gather(Education, People, "No High School Diploma 2000":"Bachelors or Higher 2000") %>%
+  ggplot(mapping = aes(x = Education, y = People, fill = state)) +
+  geom_bar(stat="identity", position = "dodge", color = "black") +
+  scale_x_discrete(name = "Education") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  theme(axis.text.x = element_text(size = 8, angle = 0)) +
+  coord_flip() +
+  ggtitle("Amount of People with Different Education Levels, 2000")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 16: Bar graph representing the percent of education levels in 2000." , echo=TRUE, results="hide"}
+state_data %>%
+  select(state_fips:state_name, Percent_of_adults_with_less_than_a_high_school_diploma_2000: 
+           Percent_of_adults_with_a_bachelors_degree_or_higher_2000) %>%
+  rename(
+    "No High School Diploma 2000" = Percent_of_adults_with_less_than_a_high_school_diploma_2000,
+    "High School Diploma 2000" = Percent_of_adults_with_a_high_school_diploma_only_2000,
+    "Some College 2000" = Percent_of_adults_completing_some_college_or_associates_degree_2000,
+    "Bachelors or Higher 2000" = Percent_of_adults_with_a_bachelors_degree_or_higher_2000
+  ) %>%
+  gather(Education, People, "No High School Diploma 2000":"Bachelors or Higher 2000") %>%
+  ggplot(mapping = aes(x = Education, y = People, fill = state)) +
+  geom_bar(stat="identity", position = "dodge", color = "black") +
+  scale_x_discrete(name = "Education") +
+  scale_y_continuous(name = "Percent") +
+  theme(axis.text.x = element_text(size = 8, angle = 0)) +
+  coord_flip() +
+  ggtitle("Percent of Different Education Levels, 2000")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 17: Bar graph representing the education levels in 2017." , echo=TRUE, results="hide"}
+state_data %>%
+  select(state_fips:state_name, Less_than_a_high_school_diploma_2013_to_17: Bachelors_degree_or_higher_2013_to_17) %>%
+  rename(
+    "No High School Diploma 2017" = Less_than_a_high_school_diploma_2013_to_17, 
+    "High School Diploma 2017" = High_school_diploma_only_2013_to_17,
+    "Some College 2017" = Some_college_or_associates_degree_2013_to_17,
+    "Bachelors or Higher 2017" = Bachelors_degree_or_higher_2013_to_17
+  ) %>%
+  gather(Education, People, "No High School Diploma 2017":"Bachelors or Higher 2017") %>%
+  ggplot(mapping = aes(x = Education, y = People, fill = state)) +
+  geom_bar(stat="identity", position = "dodge", color = "black") +
+  scale_x_discrete(name = "Education") +
+  scale_y_continuous(name = "Number of People", labels = scales::comma) +
+  theme(axis.text.x = element_text(size = 8, angle = 0)) +
+  coord_flip() +
+  ggtitle("Amount of People with Different Education Levels, 2017")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 18: Bar graph representing the percent of education levels in 2017." , echo=TRUE, results="hide"}
+state_data %>%
+  select(state_fips:state_name, Percent_of_adults_with_less_than_a_high_school_diploma_2013_to_17: 
+           Percent_of_adults_with_a_bachelors_degree_or_higher_2013_to_17) %>%
+  rename(
+    "No High School Diploma 2017" = Percent_of_adults_with_less_than_a_high_school_diploma_2013_to_17, 
+    "High School Diploma 2017" = Percent_of_adults_with_a_high_school_diploma_only_2013_to_17,
+    "Some College 2017" = Percent_of_adults_completing_some_college_or_associates_degree_2013_to_17,
+    "Bachelors or Higher 2017" = Percent_of_adults_with_a_bachelors_degree_or_higher_2013_to_17
+  ) %>%
+  gather(Education, People, "No High School Diploma 2017":"Bachelors or Higher 2017") %>%
+  ggplot(mapping = aes(x = Education, y = People, fill = state)) +
+  geom_bar(stat="identity", position = "dodge", color = "black") +
+  scale_x_discrete(name = "Education") +
+  scale_y_continuous(name = "Percent") +
+  theme(axis.text.x = element_text(size = 8, angle = 0)) +
+  coord_flip() +
+  ggtitle("Percent of Different Education Levels, 2017")
+```
+
+## Filtered County Plots
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 19: Population estimate of the counties in 2018" , echo=TRUE, results="hide"}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = POP_ESTIMATE_2018),
+          color = "green", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Number of People",
+       x = "",
+       y = "",
+       title = "Population Estimate 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 19: Unemployment rate of the counties in 2018" , echo=FALSE}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Unemployment_rate_2018),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Unemployment Rate 2018")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 20: Amount of people without a high school diploma in 2000." , echo=TRUE, results="hide"}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Less_than_a_high_school_diploma_2000),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Number of People",
+       x = "",
+       y = "",
+       title = "Amount of People Without a High School Diploma 2000")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 21: Amount of people at least a Bachelors degree in 2000." , echo=TRUE, results="hide"}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Bachelors_degree_or_higher_2000),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Number of People",
+       x = "",
+       y = "",
+       title = "Amount of People with At Least a Bachelors Degree 2000")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 22: Amount of people without a high school diploma 2017." , echo=TRUE, results="hide"}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Less_than_a_high_school_diploma_2013_to_17),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Number of People",
+       x = "",
+       y = "",
+       title = "Amount of People Without a High School Diploma 2017")
+```
+<br>
+
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 24: Amount of people with at least a Bachelors degree 2017." , echo=TRUE, results="hide"}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Bachelors_degree_or_higher_2013_to_17),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::comma, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Number of People",
+       x = "",
+       y = "",
+       title = "Amount of People with At Least a Bachelors Degree 2017")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 25: Change in the unemployment rate from 2010 to 2018." , echo=TRUE, results="hide"}
+county_data <- mutate(county_data, 
+                             unemployment_percent_change = (Unemployment_rate_2018 - Unemployment_rate_2010)
+                             /Unemployment_rate_2010)
+
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = unemployment_percent_change),
+          color  = "white", size = 0.2) +
+  geom_sf_text(data = state_data, aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Change in Unemployment Rate from 2010 to 2018")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 26: Percent of Change in Civilian Labor Force from 2010 to 2018." , echo=TRUE, results="hide"}
+county_data <- mutate(county_data,
+                             laborforce_percent_change = (Civilian_labor_force_2018 - Civilian_labor_force_2010)
+                             /Civilian_labor_force_2010)
+
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = laborforce_percent_change),
+          color  = "white", size = 0.2) +
+  geom_sf_text(data = state_data, aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Percent of Change in Civilian Labor Force")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 27: Percent of Change in Population from 2010 to 2018." , echo=TRUE, results="hide"}
+county_data <- mutate(county_data,
+                           population_percent_change = (POP_ESTIMATE_2018 - POP_ESTIMATE_2010)
+                           / POP_ESTIMATE_2010)
+
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = population_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(data = state_data, aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent",
+       x = "",
+       y = "",
+       title = "Percent of Change in Population")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 28: Percent of change for people with high school diploma or less from 2010 to 2018." , echo=TRUE, results="hide"}
+county_data <- mutate(county_data,
+                          highschool_or_less_percent_change = ((Less_than_a_high_school_diploma_2013_to_17
+                                                               + High_school_diploma_only_2013_to_17)
+                      - (Less_than_a_high_school_diploma_2000 + High_school_diploma_only_2000)) 
+                          / (Less_than_a_high_school_diploma_2000 + 
+                              High_school_diploma_only_2000))
+
+county_data %>% 
+  ggplot() +
+  geom_sf(mapping = aes(fill = highschool_or_less_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(data = state_data, aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent of Change",
+       x = "",
+       y = "",
+       title = "Percent of Change for People with High School Diploma or Less")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 29: Percent of change for people with a bachelors degree or higher from 2010 to 2018." , echo=TRUE, results="hide"}
+county_data <- mutate(county_data,
+                          Bachelors_or_higher_percent_change = (Bachelors_degree_or_higher_2013_to_17 
+                                                                - Bachelors_degree_or_higher_2000) 
+                          /Bachelors_degree_or_higher_2000)
+
+county_data %>% 
+  ggplot() +
+  geom_sf(mapping = aes(fill = Bachelors_or_higher_percent_change),
+          color = "white", size = 0.2) +
+  geom_sf_text(data = state_data, aes(label = state), size = 1.5) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::percent, low = "#98CF90", high = "#1a2e19" ) +
+  labs(fill = "Percent of Change",
+       x = "",
+       y = "",
+       title = "Percent of Change for People with a Bachelors Degree or Higher")
+```
+<br>
+
+<br>
+```{r fig.width= 6, fig.asp= 0.618, fig.align='center', fig.cap="Figure 30: The median household income for each county in 2017." , echo=TRUE, results="hide"}
+county_data %>%
+  ggplot() +
+  geom_sf(mapping = aes(fill = Median_Household_Income_2017),
+          color = "white", size = 0.05) +
+  geom_sf_text(data = state_data, aes(label = state), size = 3) +
+  coord_sf(datum = NA) +
+  scale_fill_gradient(labels = scales::dollar, low = "#98CF90", high = "#1a2e19" ) + 
+  labs(fill = "Income",
+       x = "",
+       y = "",
+       title = "Median Household Income 2017")
+```
+<br>
+
